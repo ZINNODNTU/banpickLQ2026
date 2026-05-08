@@ -72,6 +72,8 @@ body{
     cursor:pointer;
     transition:0.25s;
     text-align:center;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
 }
 
 /* HOVER */
@@ -464,23 +466,10 @@ function renderHeroes(data){
 
         });
 
-        // CLICK -> OPEN MODAL
+        let longPressTimer = null;
+        let longPressTriggered = false;
 
-        card.addEventListener("click", () => {
-
-            modal.classList.add("active");
-
-            modalImage.src = hero.image;
-
-            modalName.innerText = hero.name;
-
-        });
-
-        // RIGHT CLICK -> DARK HERO
-
-        card.addEventListener("contextmenu", e => {
-
-            e.preventDefault();
+        const toggleHiddenStatus = () => {
 
             if(hiddenHeroIds.has(hero.id)){
 
@@ -495,6 +484,89 @@ function renderHeroes(data){
             hiddenHeroIds.add(hero.id);
 
             card.classList.add("hidden");
+
+        };
+
+        const clearLongPressTimer = () => {
+
+            if(longPressTimer){
+
+                clearTimeout(longPressTimer);
+
+                longPressTimer = null;
+
+            }
+
+        };
+
+        // CLICK/TAP -> OPEN MODAL (trừ khi vừa long-press để ẩn)
+        card.addEventListener("click", () => {
+
+            if(longPressTriggered){
+
+                longPressTriggered = false;
+
+                return;
+
+            }
+
+            modal.classList.add("active");
+
+            modalImage.src = hero.image;
+
+            modalName.innerText = hero.name;
+
+        });
+
+        // RIGHT CLICK (desktop) -> DARK HERO
+        card.addEventListener("contextmenu", e => {
+
+            e.preventDefault();
+
+            toggleHiddenStatus();
+
+        });
+
+        // LONG PRESS (mobile) -> DARK HERO
+        card.addEventListener("touchstart", () => {
+
+            longPressTriggered = false;
+
+            clearLongPressTimer();
+
+            longPressTimer = setTimeout(() => {
+
+                toggleHiddenStatus();
+
+                longPressTriggered = true;
+
+            }, 450);
+
+        }, { passive:true });
+
+        card.addEventListener("touchend", () => {
+
+            clearLongPressTimer();
+
+            setTimeout(() => {
+
+                longPressTriggered = false;
+
+            }, 0);
+
+        });
+
+        card.addEventListener("touchcancel", () => {
+
+            clearLongPressTimer();
+
+            longPressTriggered = false;
+
+        });
+
+        card.addEventListener("touchmove", () => {
+
+            clearLongPressTimer();
 
         });
 
