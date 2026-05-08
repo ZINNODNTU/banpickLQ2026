@@ -201,6 +201,48 @@ body{
     font-size:18px;
 }
 
+/* TEAM PANELS */
+
+.team-panels{
+    margin-top:30px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+}
+
+.team-panel{
+    background:#0d0d0d;
+    border:1px solid #232323;
+    border-radius:12px;
+    padding:14px;
+}
+
+.team-title{
+    font-size:16px;
+    font-weight:bold;
+    margin-bottom:12px;
+}
+
+.team-title.team1{
+    color:#64b5f6;
+}
+
+.team-title.team2{
+    color:#f48fb1;
+}
+
+.team-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
+    gap:12px;
+}
+
+.team-empty{
+    color:#7f7f7f;
+    font-size:14px;
+    padding:8px 0;
+}
+
 /* MOBILE */
 
 @media(max-width:768px){
@@ -212,6 +254,10 @@ body{
 
     .hero-name{
         font-size:13px;
+    }
+
+    .team-panels{
+        grid-template-columns:1fr;
     }
 
 }
@@ -256,6 +302,28 @@ body{
 <!-- GRID -->
 
 <div class="hero-grid" id="heroGrid"></div>
+
+<!-- TEAM VIEW -->
+
+<div class="team-panels">
+
+    <div class="team-panel">
+        <div class="team-title team1" id="team1Title">
+            Team 1 (0)
+        </div>
+        <div class="team-grid" id="team1Grid"></div>
+        <div class="team-empty" id="team1Empty">Chưa có tướng trong Team 1</div>
+    </div>
+
+    <div class="team-panel">
+        <div class="team-title team2" id="team2Title">
+            Team 2 (0)
+        </div>
+        <div class="team-grid" id="team2Grid"></div>
+        <div class="team-empty" id="team2Empty">Chưa có tướng trong Team 2</div>
+    </div>
+
+</div>
 
 <!-- MODAL -->
 
@@ -328,6 +396,24 @@ document.getElementById("exportTeam1Btn");
 const exportTeam2Btn =
 document.getElementById("exportTeam2Btn");
 
+const team1Grid =
+document.getElementById("team1Grid");
+
+const team2Grid =
+document.getElementById("team2Grid");
+
+const team1Title =
+document.getElementById("team1Title");
+
+const team2Title =
+document.getElementById("team2Title");
+
+const team1Empty =
+document.getElementById("team1Empty");
+
+const team2Empty =
+document.getElementById("team2Empty");
+
 
 // ==========================
 // DATA
@@ -335,8 +421,11 @@ document.getElementById("exportTeam2Btn");
 
 let heroes = [];
 
-// Lưu team của từng tướng đã ẩn theo id (team1 hoặc team2)
-const hiddenHeroTeams = new Map();
+// Trạng thái ẩn độc lập theo từng team
+const hiddenHeroTeams = {
+    team1: new Set(),
+    team2: new Set()
+};
 
 function getActiveTeam(){
 
@@ -346,19 +435,27 @@ function getActiveTeam(){
 
 }
 
+function getTeamSet(teamKey){
+
+    return teamKey === "team2"
+    ? hiddenHeroTeams.team2
+    : hiddenHeroTeams.team1;
+
+}
+
 function applyCardTeamState(card, heroId){
 
     card.classList.remove("hidden", "team1", "team2");
 
-    const team = hiddenHeroTeams.get(heroId);
+    const activeTeam = getActiveTeam();
 
-    if(!team){
+    if(!getTeamSet(activeTeam).has(heroId)){
 
         return;
 
     }
 
-    card.classList.add("hidden", team);
+    card.classList.add("hidden", activeTeam);
 
 }
 
@@ -466,6 +563,8 @@ fetch(API_URL)
 
     renderHeroes(heroes);
 
+    renderTeamPanels();
+
 })
 
 .catch(err => {
@@ -481,6 +580,67 @@ fetch(API_URL)
 // ==========================
 // RENDER HEROES
 // ==========================
+
+function renderTeamPanels(){
+
+    const team1Heroes =
+    heroes.filter(hero =>
+        hiddenHeroTeams.team1.has(hero.id)
+    );
+
+    const team2Heroes =
+    heroes.filter(hero =>
+        hiddenHeroTeams.team2.has(hero.id)
+    );
+
+    team1Title.innerText =
+    `Team 1 (${team1Heroes.length})`;
+
+    team2Title.innerText =
+    `Team 2 (${team2Heroes.length})`;
+
+    team1Grid.innerHTML = "";
+    team2Grid.innerHTML = "";
+
+    const renderToTeamGrid = (targetGrid, list, teamClass) => {
+
+        list.forEach(hero => {
+
+            const card =
+            document.createElement("div");
+
+            card.className =
+            `hero-card hidden ${teamClass}`;
+
+            card.innerHTML = `
+                <div class="hero-image">
+                    <img
+                        src="${hero.image}"
+                        alt="${hero.name}"
+                        crossorigin="anonymous"
+                        loading="lazy"
+                        referrerpolicy="no-referrer"
+                    >
+                </div>
+                <div class="hero-name">${hero.name}</div>
+            `;
+
+            targetGrid.appendChild(card);
+
+        });
+
+    };
+
+    renderToTeamGrid(team1Grid, team1Heroes, "team1");
+    renderToTeamGrid(team2Grid, team2Heroes, "team2");
+
+    team1Empty.style.display =
+    team1Heroes.length === 0 ? "block" : "none";
+
+    team2Empty.style.display =
+    team2Heroes.length === 0 ? "block" : "none";
+
+}
 
 function renderHeroes(data){
 
@@ -541,21 +701,25 @@ function renderHeroes(data){
 
             const activeTeam = getActiveTeam();
 
-            const currentTeam = hiddenHeroTeams.get(hero.id);
+            const activeSet = getTeamSet(activeTeam);
 
-            if(currentTeam === activeTeam){
+            if(activeSet.has(hero.id)){
 
-                hiddenHeroTeams.delete(hero.id);
+                activeSet.delete(hero.id);
 
                 applyCardTeamState(card, hero.id);
+
+                renderTeamPanels();
 
                 return;
 
             }
 
-            hiddenHeroTeams.set(hero.id, activeTeam);
+            activeSet.add(hero.id);
 
             applyCardTeamState(card, hero.id);
+
+            renderTeamPanels();
 
         };
 
@@ -714,7 +878,7 @@ async function exportTeamImage(teamKey){
 
         const teamHeroes =
         heroes.filter(hero =>
-            hiddenHeroTeams.get(hero.id) === teamKey
+            getTeamSet(teamKey).has(hero.id)
         );
 
         if(teamHeroes.length === 0){
@@ -845,6 +1009,19 @@ exportTeam1Btn.addEventListener("click", () => {
 exportTeam2Btn.addEventListener("click", () => {
 
     exportTeamImage("team2");
+
+});
+
+teamSelect.addEventListener("change", () => {
+
+    const keyword =
+    searchInput.value.toLowerCase();
+
+    const filtered = heroes.filter(hero =>
+        hero.name.toLowerCase().includes(keyword)
+    );
+
+    renderHeroes(filtered);
 
 });
 
