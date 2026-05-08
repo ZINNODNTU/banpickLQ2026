@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+<title>Danh Sách Tướng Liên Quân</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    background:#000;
+    color:white;
+    font-family:Arial, sans-serif;
+    padding:20px;
+}
+
+/* TOP BAR */
+
+.top-bar{
+    margin-bottom:25px;
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:center;
+}
+
+.search-box{
+    width:320px;
+    max-width:100%;
+    padding:12px 18px;
+    border-radius:30px;
+    border:1px solid #333;
+    background:#111;
+    color:white;
+    outline:none;
+    font-size:15px;
+}
+
+/* EXPORT BUTTON */
+
+#exportBtn{
+    padding:12px 18px;
+    border:none;
+    border-radius:12px;
+    background:#ff9800;
+    color:white;
+    cursor:pointer;
+    font-weight:bold;
+    transition:0.2s;
+}
+
+#exportBtn:hover{
+    opacity:0.85;
+}
+
+/* GRID */
+
+.hero-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
+    gap:22px;
+}
+
+.hero-card{
+    cursor:pointer;
+    transition:0.25s;
+    text-align:center;
+}
+
+/* HOVER */
+
+.hero-card:hover{
+    transform:translateY(-5px) scale(1.03);
+}
+
+/* DARK HERO */
+
+.hero-card.hidden{
+    opacity:0.35;
+    filter:grayscale(100%);
+}
+
+/* IMAGE */
+
+.hero-image{
+    width:100%;
+    aspect-ratio:1/1;
+    overflow:hidden;
+    border-radius:8px;
+    border:1px solid #222;
+    background:#111;
+}
+
+.hero-image img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+}
+
+/* NAME */
+
+.hero-name{
+    margin-top:8px;
+    color:#ddd;
+    font-size:15px;
+}
+
+/* MODAL */
+
+.modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.88);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:999;
+    padding:20px;
+}
+
+.modal.active{
+    display:flex;
+}
+
+.modal-content{
+    max-width:900px;
+    width:100%;
+    position:relative;
+}
+
+.modal img{
+    width:100%;
+    border-radius:14px;
+    display:block;
+}
+
+.close-btn{
+    position:absolute;
+    top:-45px;
+    right:0;
+    font-size:35px;
+    cursor:pointer;
+    color:white;
+}
+
+.modal-name{
+    text-align:center;
+    margin-top:15px;
+    font-size:24px;
+}
+
+/* LOADING */
+
+.loading{
+    text-align:center;
+    padding:40px;
+    color:#999;
+    font-size:18px;
+}
+
+/* MOBILE */
+
+@media(max-width:768px){
+
+    .hero-grid{
+        grid-template-columns:repeat(auto-fill,minmax(90px,1fr));
+        gap:15px;
+    }
+
+    .hero-name{
+        font-size:13px;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- TOP BAR -->
+
+<div class="top-bar">
+
+    <input 
+        type="text"
+        class="search-box"
+        id="searchInput"
+        placeholder="Tìm kiếm tướng..."
+    />
+
+    <button id="exportBtn">
+        Xuất Ảnh
+    </button>
+
+</div>
+
+<!-- LOADING -->
+
+<div id="loading" class="loading">
+    Đang tải dữ liệu...
+</div>
+
+<!-- GRID -->
+
+<div class="hero-grid" id="heroGrid"></div>
+
+<!-- MODAL -->
+
+<div class="modal" id="modal">
+
+    <div class="modal-content">
+
+        <div class="close-btn" id="closeBtn">
+            ✕
+        </div>
+
+        <img id="modalImage" src="" alt="Chi tiết tướng" crossorigin="anonymous" />
+
+        <div class="modal-name" id="modalName"></div>
+
+    </div>
+
+</div>
+
+<!-- HTML2CANVAS -->
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<script>
+
+// ==========================
+// GOOGLE SHEET CONFIG
+// ==========================
+
+const SHEET_ID =
+"15piPhq1y-SgeCwBaY_P8kog9CMdvE6ABcg4heKb23Dc";
+
+const GID = "1831500532";
+
+const API_URL =
+`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}&tqx=out:json`;
+
+
+// ==========================
+// ELEMENTS
+// ==========================
+
+const heroGrid =
+document.getElementById("heroGrid");
+
+const loading =
+document.getElementById("loading");
+
+const searchInput =
+document.getElementById("searchInput");
+
+const modal =
+document.getElementById("modal");
+
+const modalImage =
+document.getElementById("modalImage");
+
+const modalName =
+document.getElementById("modalName");
+
+const closeBtn =
+document.getElementById("closeBtn");
+
+const exportBtn =
+document.getElementById("exportBtn");
+
+
+// ==========================
+// DATA
+// ==========================
+
+let heroes = [];
+
+// Lưu trạng thái ẩn theo id để không bị mất khi tìm kiếm / render lại
+const hiddenHeroIds = new Set();
+
+function getProxyImageUrl(url){
+
+    if(!url){
+
+        return "";
+
+    }
+
+    const cleanUrl = String(url).trim();
+
+    if(!/^https?:\/\//i.test(cleanUrl)){
+
+        return "";
+
+    }
+
+    const noProtocol =
+    cleanUrl.replace(/^https?:\/\//i, "");
+
+    // Proxy giúp hiển thị ổn định hơn và hỗ trợ export ảnh qua canvas
+    return `https://images.weserv.nl/?url=${encodeURIComponent(noProtocol)}`;
+
+}
+
+function getFallbackSvgDataUrl(name){
+
+    const safeName =
+    String(name || "Tướng")
+    .replace(/[<>&"]/g, " ")
+    .trim();
+
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+            <rect width="100%" height="100%" fill="#111"/>
+            <text x="50%" y="48%" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="24" font-family="Arial">Không tải được ảnh</text>
+            <text x="50%" y="58%" dominant-baseline="middle" text-anchor="middle" fill="#bbb" font-size="20" font-family="Arial">${safeName}</text>
+        </svg>
+    `;
+
+    return "data:image/svg+xml;charset=utf-8," +
+    encodeURIComponent(svg);
+
+}
+
+
+// ==========================
+// LOAD GOOGLE SHEET
+// ==========================
+
+fetch(API_URL)
+
+.then(res => res.text())
+
+.then(text => {
+
+    const json = JSON.parse(
+        text.substring(47).slice(0, -2)
+    );
+
+    const rows = json.table.rows;
+
+    heroes = rows
+
+    .map((row, index) => {
+
+        const name =
+        String(row?.c?.[0]?.v || "").trim();
+
+        const imageOriginal =
+        String(row?.c?.[1]?.v || "").trim();
+
+        const imageProxy =
+        getProxyImageUrl(imageOriginal);
+
+        return {
+
+            id: index,
+
+            name,
+
+            imageOriginal,
+
+            imageProxy,
+
+            // Ưu tiên ảnh qua proxy, fallback ảnh gốc khi proxy lỗi
+            image: imageProxy || imageOriginal
+
+        };
+
+    })
+
+    .filter(hero =>
+
+        hero.name &&
+        hero.imageOriginal &&
+        /^https?:\/\//i.test(hero.imageOriginal) &&
+        hero.name.toLowerCase() !== "tên tướng"
+
+    );
+
+    loading.style.display = "none";
+
+    renderHeroes(heroes);
+
+})
+
+.catch(err => {
+
+    console.error(err);
+
+    loading.innerHTML =
+    "Không tải được Google Sheet";
+
+});
+
+
+// ==========================
+// RENDER HEROES
+// ==========================
+
+function renderHeroes(data){
+
+    heroGrid.innerHTML = "";
+
+    data.forEach(hero => {
+
+        const card =
+        document.createElement("div");
+
+        card.className = "hero-card";
+
+        if(hiddenHeroIds.has(hero.id)){
+
+            card.classList.add("hidden");
+
+        }
+
+        card.innerHTML = `
+            <div class="hero-image">
+                <img
+                    src="${hero.image}"
+                    alt="${hero.name}"
+                    crossorigin="anonymous"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                >
+            </div>
+
+            <div class="hero-name">
+                ${hero.name}
+            </div>
+        `;
+
+        const imageEl =
+        card.querySelector("img");
+
+        imageEl.addEventListener("error", () => {
+
+            // Lỗi proxy -> thử ảnh gốc
+            if(imageEl.dataset.fallbackApplied !== "1"){
+
+                imageEl.dataset.fallbackApplied = "1";
+
+                imageEl.src =
+                hero.imageOriginal;
+
+                return;
+
+            }
+
+            // Ảnh gốc vẫn lỗi -> dùng SVG fallback
+            imageEl.src =
+            getFallbackSvgDataUrl(hero.name);
+
+        });
+
+        // CLICK -> OPEN MODAL
+
+        card.addEventListener("click", () => {
+
+            modal.classList.add("active");
+
+            modalImage.src = hero.image;
+
+            modalName.innerText = hero.name;
+
+        });
+
+        // RIGHT CLICK -> DARK HERO
+
+        card.addEventListener("contextmenu", e => {
+
+            e.preventDefault();
+
+            if(hiddenHeroIds.has(hero.id)){
+
+                hiddenHeroIds.delete(hero.id);
+
+                card.classList.remove("hidden");
+
+                return;
+
+            }
+
+            hiddenHeroIds.add(hero.id);
+
+            card.classList.add("hidden");
+
+        });
+
+        heroGrid.appendChild(card);
+
+    });
+
+}
+
+
+// ==========================
+// SEARCH
+// ==========================
+
+searchInput.addEventListener("input", e => {
+
+    const keyword =
+    e.target.value.toLowerCase();
+
+    const filtered = heroes.filter(hero =>
+
+        hero.name
+        .toLowerCase()
+        .includes(keyword)
+
+    );
+
+    renderHeroes(filtered);
+
+});
+
+
+// ==========================
+// CLOSE MODAL
+// ==========================
+
+closeBtn.addEventListener("click", () => {
+
+    modal.classList.remove("active");
+
+});
+
+modal.addEventListener("click", e => {
+
+    if(e.target === modal){
+
+        modal.classList.remove("active");
+
+    }
+
+});
+
+
+// ==========================
+// EXPORT IMAGE
+// ==========================
+
+exportBtn.addEventListener("click", async () => {
+
+    try{
+
+        exportBtn.innerText = "Đang xuất...";
+
+        // Chỉ lấy các tướng đang bị ẩn để xuất ảnh
+        const hiddenHeroes =
+        heroes.filter(hero =>
+            hiddenHeroIds.has(hero.id)
+        );
+
+        if(hiddenHeroes.length === 0){
+
+            exportBtn.innerText = "Xuất Ảnh";
+
+            alert("Chưa có tướng nào bị ẩn để xuất ảnh");
+
+            return;
+
+        }
+
+        const exportGrid =
+        document.createElement("div");
+
+        exportGrid.className = "hero-grid";
+
+        hiddenHeroes.forEach(hero => {
+
+            const card =
+            document.createElement("div");
+
+            card.className = "hero-card hidden";
+
+            card.innerHTML = `
+                <div class="hero-image">
+                    <img
+                        src="${hero.image}"
+                        alt="${hero.name}"
+                        crossorigin="anonymous"
+                        referrerpolicy="no-referrer"
+                    >
+                </div>
+                <div class="hero-name">${hero.name}</div>
+            `;
+
+            exportGrid.appendChild(card);
+
+        });
+
+        // Wrapper export
+        const wrapper =
+        document.createElement("div");
+
+        wrapper.style.position = "fixed";
+        wrapper.style.left = "-99999px";
+        wrapper.style.top = "0";
+        wrapper.style.background = "#000";
+        wrapper.style.padding = "30px";
+        wrapper.style.width =
+        heroGrid.offsetWidth + "px";
+
+        wrapper.appendChild(exportGrid);
+
+        document.body.appendChild(wrapper);
+
+        // Wait images load
+        const images =
+        wrapper.querySelectorAll("img");
+
+        await Promise.all(
+
+            [...images].map(img => {
+
+                return new Promise(resolve => {
+
+                    if(img.complete){
+
+                        resolve();
+
+                    }else{
+
+                        img.onload = resolve;
+                        img.onerror = resolve;
+
+                    }
+
+                });
+
+            })
+
+        );
+
+        // Export canvas
+        const canvas = await html2canvas(wrapper, {
+
+            backgroundColor:"#000",
+
+            scale:3,
+
+            useCORS:true,
+
+            allowTaint:false
+
+        });
+
+        // Remove temp wrapper
+        document.body.removeChild(wrapper);
+
+        // Download
+        const link =
+        document.createElement("a");
+
+        link.download =
+        "danh_sach_tuong_lien_quan.png";
+
+        link.href =
+        canvas.toDataURL("image/png");
+
+        link.click();
+
+        exportBtn.innerText = "Xuất Ảnh";
+
+    }catch(err){
+
+        console.error(err);
+
+        exportBtn.innerText = "Xuất Ảnh";
+
+        alert("Xuất ảnh thất bại");
+
+    }
+
+});
+
+</script>
+
+</body>
+</html>
